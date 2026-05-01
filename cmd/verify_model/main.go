@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/gomlx/gomlx/backends"
+	_ "github.com/gomlx/gomlx/backends/default"
 	"github.com/gomlx/gomlx/pkg/core/dtypes"
 	"github.com/gomlx/gomlx/pkg/core/graph"
 	"github.com/gomlx/gomlx/pkg/core/shapes"
 	"github.com/gomlx/gomlx/pkg/ml/context"
 	"github.com/innomon/legal-gemma4/pkg/model"
-	_ "github.com/gomlx/gomlx/backends/default"
 )
 
 func main() {
@@ -55,6 +56,30 @@ func main() {
 	fmt.Println("✅ Model architecture verified!")
 }
 
+/*
+The mockModelVariables function  serves as a "shim" to allow architectural verification of the model
+without requiring the actual multi-gigabyte pretrained weight files.
+
+  Key Reasons for the Mock:
+
+   1. Graph Validation: GoMLX requires all variables referenced in a computation graph to exist within the ml.Context.
+      Since verify_model aims to confirm that the Gemma4Model function correctly assembles the transformer blocks,
+	  PLE signals, and QLoRA layers, it must provide those variables so the graph can be successfully compiled.
+   2. NF4/QLoRA Structure Testing: Because this project uses a handcrafted NF4 quantization scheme,
+      the mock specifically creates the packed_weight (uint8), absmax scales (float32), and lut (Look-Up Table) variables.
+	  This verifies that the dequantization logic in pkg/layers/qlora.go correctly handles these specific shapes and data types.
+   3. Memory Efficiency: By mocking the variables with reduced dimensions
+      (e.g., HiddenDim: 512 and NumLayers: 2 instead of the full E2B specs), the utility can run instantly on a standard
+      laptop or the target M4 Mac without triggering OOM (Out Of Memory) errors or requiring a GPU/NPU for a simple structural check.
+   4. Integration Testing: It confirms that the pkg/model logic is correctly searching for variables in the expected context scopes
+      (like block_0/attention/q_proj/packed_weight).
+
+  In short, it decouples logic verification from data loading, allowing you to iterate on the model architecture
+  even if the safetensors files aren't present or are still being converted.
+
+
+*/
+
 func mockModelVariables(ctx *context.Context, config model.Config) {
 	h := config.HiddenDim
 	intermediate := h * 4
@@ -65,10 +90,10 @@ func mockModelVariables(ctx *context.Context, config model.Config) {
 	// 2. Transformer Blocks
 	for i := 0; i < config.NumLayers; i++ {
 		blockScope := ctx.In(fmt.Sprintf("block_%d", i))
-		
+
 		// PLE
 		blockScope.In("ple").VariableWithShape("weight", shapes.Make(dtypes.Float32, h))
-		
+
 		// Norms
 		blockScope.In("input_layernorm").In("rms_norm").VariableWithShape("weight", shapes.Make(dtypes.Float32, h))
 		blockScope.In("post_attention_layernorm").In("rms_norm").VariableWithShape("weight", shapes.Make(dtypes.Float32, h))
@@ -79,7 +104,7 @@ func mockModelVariables(ctx *context.Context, config model.Config) {
 		for _, p := range projs {
 			mockQLoRAVariables(attnScope.In(p), h, h, config.BlockSize)
 		}
-		
+
 		// MLP
 		mlpScope := blockScope.In("mlp")
 		mockQLoRAVariables(mlpScope.In("gate_proj"), h, intermediate, config.BlockSize)
