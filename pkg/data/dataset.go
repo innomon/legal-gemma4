@@ -43,6 +43,9 @@ func NewDataset(filePath string, tokenizerPath string, maxLen int) (*Dataset, er
 		}
 		entries = append(entries, entry)
 	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("failed to scan dataset file: %v", err)
+	}
 
 	return &Dataset{
 		tokenizer: tk,
@@ -54,6 +57,9 @@ func NewDataset(filePath string, tokenizerPath string, maxLen int) (*Dataset, er
 // GetBatch returns a batch of tokenized prompts and targets.
 // Returns: tokens [batch, maxLen], targets [batch, maxLen]
 func (d *Dataset) GetBatch(startIdx, batchSize int) ([][]int32, [][]int32) {
+	if len(d.entries) == 0 {
+		return nil, nil
+	}
 	endIdx := startIdx + batchSize
 	if endIdx > len(d.entries) {
 		endIdx = len(d.entries)

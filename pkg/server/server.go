@@ -11,20 +11,20 @@ import (
 	"github.com/gomlx/gomlx/backends"
 	"github.com/gomlx/gomlx/pkg/core/graph"
 	"github.com/gomlx/gomlx/pkg/core/tensors"
-	"github.com/gomlx/gomlx/pkg/ml/context"
+	ml_context "github.com/gomlx/gomlx/pkg/ml/context"
 	"github.com/innomon/legal-gemma4/pkg/model"
 )
 
 // Server handles OpenAI-compatible requests for the Legal-Gemma4 model.
 type Server struct {
 	Backend       backends.Backend
-	Context       *context.Context
+	Context       *ml_context.Context
 	Port          int
 	ModelDir      string
 	TokenizerPath string
 	Config        model.Config
 	tokenizer     *tokenizers.Tokenizer
-	exec          *context.Exec
+	exec          *ml_context.Exec
 }
 
 // Model represents a simple OpenAI model object.
@@ -81,7 +81,7 @@ func (s *Server) Start() error {
 	}
 
 	// 4. Setup Execution
-	s.exec, err = context.NewExec(s.Backend, s.Context, func(ctx *context.Context, tokens *graph.Node) *graph.Node {
+	s.exec, err = ml_context.NewExec(s.Backend, s.Context, func(ctx *ml_context.Context, tokens *graph.Node) *graph.Node {
 		logits := model.Gemma4Model(ctx, tokens, s.Config)
 		// Return only the last token's logits for inference
 		// logits: [batch, seq, vocab_size]
@@ -105,7 +105,9 @@ func (s *Server) handleListModels(w http.ResponseWriter, r *http.Request) {
 		{ID: "legal-gemma-4-e2b", Object: "model", Created: time.Now().Unix(), OwnedBy: "legal-gemma"},
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"data": models})
+	if err := json.NewEncoder(w).Encode(map[string]any{"data": models}); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -135,6 +137,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Tokenize
 	tokens, _ := s.tokenizer.Encode(prompt.String(), true)
+	if len(tokens) == 0 {
+		http.Error(w, "empty prompt after tokenization", http.StatusBadRequest)
+		return
+	}
 	inputIDs := make([]int32, len(tokens))
 	for i, t := range tokens {
 		inputIDs[i] = int32(t)
@@ -158,10 +164,17 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		logitsTensor := results[0]
 		// logits: [1, 1, vocab_size]
 		// Greedy search for now
-		logits := logitsTensor.Value().([][][]float32)[0][0]
+		logitsAny := logitsTensor.Value()
+		logits, ok := logitsAny.([][][]float32)
+		if !ok || len(logits) == 0 || len(logits[0]) == 0 {
+			http.Error(w, "unexpected logits shape", http.StatusInternalServerError)
+			return
+		}
+		
+		lastLogits := logits[0][0]
 		var nextToken int32
 		var maxLogit float32 = -1e10
-		for i, l := range logits {
+		for i, l := range lastLogits {
 			if l > maxLogit {
 				maxLogit = l
 				nextToken = int32(i)
@@ -204,5 +217,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		// Log error if needed (cannot send another response headers)
+	}
 }
