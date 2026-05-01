@@ -62,6 +62,6 @@ Implement a struct that handles the dual-path forward pass:
 
 **Code Reference** you can refer code from `/home/innomon/orez/llm/go-turboquant` where Gemma4 is implemented. **Note** it has turbo quant and MTP, we do not want to use them in this project.
 
-**Remember** for go cammands and registry create handcrafted code, don't use cobra/spf13 or similar libs
+**Remember** for go commands and registry create handcrafted code, don't use cobra/spf13 or similar libs
 
 
