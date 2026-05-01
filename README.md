@@ -39,7 +39,8 @@ The project requires `libtokenizers` to be available for CGO linking.
 wget https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.linux-arm64.tar.gz
 tar -xzf libtokenizers.linux-arm64.tar.gz
 sudo cp libtokenizers.a /usr/local/lib/
-sudo cp tokenizers.h /usr/local/include/
+# Header is in the Go module cache
+sudo cp $(go env GOPATH)/pkg/mod/github.com/daulet/tokenizers@v1.27.0/tokenizers.h /usr/local/include/
 ```
 
 **For Mac M4 (macOS ARM64):**
@@ -47,7 +48,8 @@ sudo cp tokenizers.h /usr/local/include/
 curl -LO https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.darwin-arm64.tar.gz
 tar -xzf libtokenizers.darwin-arm64.tar.gz
 sudo cp libtokenizers.a /usr/local/lib/
-sudo cp tokenizers.h /usr/local/include/
+# Header is in the Go module cache
+sudo cp $(go env GOPATH)/pkg/mod/github.com/daulet/tokenizers@v1.27.0/tokenizers.h /usr/local/include/
 ```
 
 **Environment Setup:**
@@ -57,7 +59,16 @@ export CGO_LDFLAGS="-L/path/to/lib"
 export CGO_CFLAGS="-I/path/to/include"
 ```
 
-## Platform-Specific Build & Run
+### Data Preparation
+
+Download the `viber1/indian-law-dataset` from Hugging Face:
+
+```bash
+go run cmd/data/main.go download --output indian_law.jsonl
+```
+
+## Quick Start
+
 
 ### Mac M4 (Apple Silicon)
 Optimized for Metal acceleration using `go-darwinml`.
@@ -118,6 +129,42 @@ Merge the trained LoRA adapters back into the base weights and export to a stand
 
 ```bash
 go run cmd/export/main.go --model quantized_model --output legal-gemma4-final.safetensors
+```
+
+## OpenAI API Server
+
+The project includes an OpenAI-compatible API server to serve the model for chat completions.
+
+### Build the Server
+```bash
+CGO_ENABLED=1 go build -o api ./cmd/api/main.go
+```
+
+### Run the Server
+```bash
+CGO_ENABLED=1 ./api serve \
+    --model quantized_model \
+    --tokenizer tokenizer.json \
+    --port 8080
+```
+
+### Verification
+
+**List Models:**
+```bash
+curl http://localhost:8080/v1/models
+```
+
+**Chat Completion:**
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "legal-gemma-4-e2b",
+    "messages": [
+      {"role": "user", "content": "What is the penalty for perjury under Indian law?"}
+    ]
+  }'
 ```
 
 ## Evaluation (AIBE Benchmark)
