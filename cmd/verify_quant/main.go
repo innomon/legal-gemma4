@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"github.com/gomlx/gomlx/backends"
 	"github.com/gomlx/gomlx/pkg/core/graph"
 	"github.com/gomlx/gomlx/pkg/core/tensors"
-	"github.com/gomlx/gomlx/pkg/core/shapes"
 	"github.com/innomon/legal-gemma4/pkg/quant"
 	_ "github.com/gomlx/gomlx/backends/default"
 )
@@ -15,13 +15,19 @@ func main() {
 	numBlocks := 2
 	n := blockSize * numBlocks
 
-	// 1. Generate random weights
+	// 1. Initialize Backend
+	backend, err := backends.New()
+	if err != nil {
+		panic(err)
+	}
+
+	// 2. Generate random weights
 	weights := make([]float32, n)
 	for i := range weights {
 		weights[i] = float32(rand.NormFloat64())
 	}
 
-	// 2. Quantize and Pack
+	// 3. Quantize and Pack
 	packed := make([]uint8, n/2)
 	absmaxs := make([]float32, numBlocks)
 
@@ -38,20 +44,25 @@ func main() {
 		}
 	}
 
-	// 3. Dequantize using GoMLX Graph
-	g := graph.New()
-	indicesNode := graph.Constant(g, tensors.FromFlat(packed))
-	absmaxNode := graph.Constant(g, tensors.FromFlat(absmaxs))
-	lutNode := graph.Constant(g, tensors.FromFlat(quant.NF4Values))
+	// 4. Dequantize using GoMLX functional API
+	exec, err := graph.NewExec(backend, func(indices, absmax, lut *graph.Node) *graph.Node {
+		return quant.DequantizeNF4Graph(indices, absmax, lut, blockSize)
+	})
+	if err != nil {
+		panic(err)
+	}
 
-	dequantizedNode := quant.DequantizeNF4Graph(indicesNode, absmaxNode, lutNode, blockSize)
-	
-	// Execute graph
-	exec := graph.NewExec(g, dequantizedNode)
-	results := exec.Call()
+	indicesTensor := tensors.FromAnyValue(packed)
+	absmaxTensor := tensors.FromAnyValue(absmaxs)
+	lutTensor := tensors.FromAnyValue(quant.NF4Values)
+
+	results, err := exec.Exec(indicesTensor, absmaxTensor, lutTensor)
+	if err != nil {
+		panic(err)
+	}
 	dequantized := results[0].Value().([]float32)
 
-	// 4. Compare
+	// 5. Compare
 	fmt.Printf("First 8 original:    %v\n", weights[:8])
 	fmt.Printf("First 8 dequantized: %v\n", dequantized[:8])
 
