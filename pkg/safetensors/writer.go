@@ -3,7 +3,6 @@ package safetensors
 import (
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"os"
 )
 

@@ -25,10 +25,70 @@ The primary goal of this project is to achieve a performance level capable of pa
 ### Prerequisites
 
 - Go 1.25 or later.
-- [GoMLX](https://github.com/gomlx/gomlx) installed with the `go-darwinml` backend (for Mac M4 acceleration).
+- **GoMLX Backends:**
+  - **Mac M4:** [go-darwinml](https://github.com/gomlx/go-darwinml) for Metal acceleration.
+  - **Raspberry Pi 5:** Default GoMLX XLA/CPU backend.
+- **libtokenizers:** Required for the `daulet/tokenizers` bindings.
 
+#### Installing libtokenizers
+
+The project requires `libtokenizers` to be available for CGO linking.
+
+**For Raspberry Pi 5 (Linux ARM64):**
 ```bash
-go mod tidy
+wget https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.linux-arm64.tar.gz
+tar -xzf libtokenizers.linux-arm64.tar.gz
+sudo cp libtokenizers.a /usr/local/lib/
+sudo cp tokenizers.h /usr/local/include/
+```
+
+**For Mac M4 (macOS ARM64):**
+```bash
+curl -LO https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.darwin-arm64.tar.gz
+tar -xzf libtokenizers.darwin-arm64.tar.gz
+sudo cp libtokenizers.a /usr/local/lib/
+sudo cp tokenizers.h /usr/local/include/
+```
+
+**Environment Setup:**
+Ensure `CGO_ENABLED=1` is set when building or running. If you installed the library in a custom location, set:
+```bash
+export CGO_LDFLAGS="-L/path/to/lib"
+export CGO_CFLAGS="-I/path/to/include"
+```
+
+## Platform-Specific Build & Run
+
+### Mac M4 (Apple Silicon)
+Optimized for Metal acceleration using `go-darwinml`.
+
+**Build:**
+```bash
+CGO_ENABLED=1 go build -o legal-gemma4 ./cmd/train
+```
+
+**Run Training:**
+```bash
+CGO_ENABLED=1 ./legal-gemma4 \
+    --model quantized_model \
+    --dataset indian_law.jsonl \
+    --tokenizer tokenizer.json
+```
+
+### Raspberry Pi 5 (Linux ARM64)
+Uses the default XLA CPU backend. Note: Training on Pi 5 is significantly slower than on M4.
+
+**Build:**
+```bash
+CGO_ENABLED=1 go build -o legal-gemma4 ./cmd/train
+```
+
+**Run Training:**
+```bash
+CGO_ENABLED=1 ./legal-gemma4 \
+    --model quantized_model \
+    --dataset indian_law.jsonl \
+    --tokenizer tokenizer.json
 ```
 
 ### 1. Quantization

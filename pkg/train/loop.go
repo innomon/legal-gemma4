@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 	"github.com/gomlx/gomlx/backends"
-	"github.com/gomlx/gomlx/pkg/core/dtypes"
 	"github.com/gomlx/gomlx/pkg/core/graph"
 	"github.com/gomlx/gomlx/pkg/ml/context"
 	"github.com/gomlx/gomlx/pkg/ml/train/losses"
@@ -24,10 +23,10 @@ func TrainQLoRA(backend backends.Backend, ctx *context.Context, config model.Con
 		g := inputs.Graph()
 		logits := model.Gemma4Model(ctx, inputs, config)
 
-		// Loss: SparseCategoricalCrossEntropy
+		// Loss: SparseCategoricalCrossEntropyLogits
 		// logits: [batch, seq, vocab]
 		// targets: [batch, seq]
-		loss := losses.SparseCategoricalCrossEntropy(logits, targets).Done()
+		loss := losses.SparseCategoricalCrossEntropyLogits([]*graph.Node{targets}, []*graph.Node{logits})
 		
 		// Apply gradients only to trainable variables (LoRA adapters)
 		opt.UpdateGraph(ctx, g, loss)

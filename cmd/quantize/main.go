@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/gomlx/gomlx/backends"
@@ -27,7 +26,7 @@ func main() {
 	}
 
 	// 1. Initialize Backend
-	backend, err := backends.New()
+	_, err := backends.New()
 	if err != nil {
 		log.Fatalf("Failed to initialize backend: %v", err)
 	}

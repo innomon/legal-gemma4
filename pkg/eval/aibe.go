@@ -2,7 +2,6 @@ package eval
 
 import (
 	"fmt"
-	"strings"
 	"github.com/gomlx/gomlx/backends"
 	"github.com/gomlx/gomlx/pkg/core/graph"
 	"github.com/gomlx/gomlx/pkg/ml/context"
@@ -20,7 +19,7 @@ type AIBEQuestion struct {
 // RunAIBEBenchmark evaluates the model on a set of AIBE questions.
 func RunAIBEBenchmark(backend backends.Backend, ctx *context.Context, config model.Config, questions []AIBEQuestion, ds *data.Dataset) {
 	// 1. Build Inference Graph
-	inferExec, _ := context.NewExec(backend, ctx, func(ctx *context.Context, tokens *graph.Node) *graph.Node {
+	_, _ = context.NewExec(backend, ctx, func(ctx *context.Context, tokens *graph.Node) *graph.Node {
 		logits := model.Gemma4Model(ctx, tokens, config)
 		// We only care about the last token's logits for next-token prediction
 		seqLen := tokens.Shape().Dimensions[1]

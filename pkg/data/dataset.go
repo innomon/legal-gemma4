@@ -68,7 +68,7 @@ func (d *Dataset) GetBatch(startIdx, batchSize int) ([][]int32, [][]int32) {
 		
 		prompt := fmt.Sprintf("### Question: %s \n### Advocate Analysis: %s", entry.Question, entry.Answer)
 		
-		tokens := d.tokenizer.Encode(prompt, true)
+		tokens, _ := d.tokenizer.Encode(prompt, true)
 		ids := make([]int32, d.maxLen)
 		targets := make([]int32, d.maxLen)
 		
